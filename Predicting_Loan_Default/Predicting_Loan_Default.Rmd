@@ -1,0 +1,405 @@
+---
+title: "Project: Predicting Loan Defaults with Logistic Regression"
+author: "Sanzida Parvin"
+date: "May 07, 2018"
+output: word_document
+frontsize: 12pt
+---
+
+## Executive Summary
+
+# Problem
+
+It is very important for a bank to screen the potential good or bad clients for sanctioning any loan. The clients who will repay their loans in a timely manner are treated as good clients as they make profit for the bank. On the other hand, the clients who are not able to repay their loans can cause a big loss for the bank. Therefore, it is very crucial for any financial organization to identify the clients and predicts the loan defaults. In this study, logistic regression technique was implimented to predict the loan defaults.
+
+# Method
+
+The study was executed in three steps: (i) Cleaning the raw data for the logistic regression analysis, (ii) Model selection using statistical tools and (iii) Profit calculation using different threshold levels.Briefly, after collecting the raw data, Some features engineering was done to reduce the unnecessary and redundant explanatory variables for preparing a cleaned version of the dataset. However, there were some missing values in the cleaned dataset. If any fields of values are empty or have some unusual values, then those are called missing values. Missing values should be treated in a proper way before running any analysis. For this analysis the missing values were imputed using statistical tools named 'mice'. Finally got the cleaned final version if the input dataset which consists of 49,999 observations and 29 variables.After that some statistical analysis were performed to find out a suitable and effective model by which the good and bad loan applicants can be identified and the profit of the bank can be calculated based on the predicted good loans. The cleaned and final version of the input dataset was divided into two parts, test dataset and training dataset. Training dataset was used to get the suitable method, and the test dataset was applied on that method to check the accuracy. Finally the profit was calculated by varying the thereshold values.  
+
+# Results
+
+Statistical calculations showed the overall accuracy level of the model, correctly predicted good and bad loans percentage and calculated the profit range based on the predicted good loans. By changing the threshold levels, different profits were calculated to identify the best threshold level that can make the highest profit with high accuracy and low percentage of incorrect predictions. The following table represents the profit of the predicted good loans as well as the different threshold levels for the good and bad loans.
+
+
+```{r echo=FALSE}
+all_profit = matrix(c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,
+                      3023265.06,3804192.2,4353921.92,4349920.54,3611367.2,2728642.18,1779788.48,596516.07,63720.37,
+                      99.89,97.78,90.97,80.65,64.89,48.4,30.72,10.09,0.72,
+                      0.94,10.67,28.05,47.32,64.97,79.73,90.67,98.19,100),ncol = 4)
+colnames(all_profit) <- c("Threshold", "TotalProfit", "Good Loans %", "Bad Loans %")
+as.table(all_profit)
+```
+
+## Introduction
+
+The dataset 'loans50k' contains information about the loan applicants of banks.  There are 50,000 loan applicants and 30 variables that contains different informations about the applicants in the dataset. The purpose of this project is to predict which applicants are likely to default on their loans using logistic regression. The given dataset was in a raw format and needs to clean and prepare it for the statistical analysis. The first approach of preparing the dataset is to look on it, remove any irrelevant rows and variables that has no effect on the prediction of default loans. For instance, id, state as well as the rows that has no income were removed to clean the dataset prior to analysis. 
+
+## Load Data
+
+```{r}
+loans = read.csv("loans50k.csv")
+#head(loans)
+```
+
+```{r echo=FALSE}
+noIncome = which(is.na(loans$income))
+loans = loans[-noIncome, ] # Remove the rows that has no income
+```
+
+## Preparing and Exploring the Data
+
+The response variable 'loan_status' was prepared according to the instruction of the project. Then some feature engineering has done to reduce the categories inside a variable to make it more clear and do the error free analysis. The feature engineering includes,
+
+1. New variables have created with reduced categories and the old one has removed, so that there would be no duplicate columns in the final dataset.  
+
+2. There also has some redundancy in variables like, 'totalAcc' and 'openAcc'. 'totalAcc' indicates total number of credit lines in the file, which includes both open and closed accounts but the variable 'openAcc' is the number of open credit lines. Subtract the 'openAcc' from 'totalAcc' to get the number of closed accounts, which shows by the variable 'closeAcc' in the cleaned dataset. By doing this, the information will be more clear. 
+
+3. Another redundancy was 'totalBcLim'(total credit limits of credit cards) which already includes in 'totalRevLim'(sum of credit limits from all credit lines). 
+
+```{r include=FALSE}
+filter_data = loans[which((loans$status!="") & (loans$status!="Current") & (loans$status!="Late (16-30 days)") & 
+                            (loans$status!="Late (31-120 days)") & (loans$status!="In Grace Period")), ]
+```
+
+```{r echo=FALSE}
+filter_data = as.data.frame(filter_data)
+#attach(filter_data)
+filter_data$loan_status[filter_data$status == "Fully Paid"] <- "Good"
+filter_data$loan_status[(filter_data$status == "Charged Off") | (filter_data$status == "Default")] <- "Bad"
+filter_data$loan_status = as.factor(filter_data$loan_status)
+
+filter_data$emp_status = ifelse(filter_data$employment=="", "job_tittle", "no_job_tittle")
+filter_data$emp_status = as.factor(filter_data$emp_status)
+
+filter_data$employed_length [(filter_data$length == "< 1 year") | (filter_data$length == "1 year")] <- "0-1 year"
+filter_data$employed_length [(filter_data$length == "2 years") | (filter_data$length == "3 years") | 
+                               (filter_data$length == "4 years") | (filter_data$length == "5 years")] <- "2-5 years"
+filter_data$employed_length [(filter_data$length == "6 years") | (filter_data$length == "7 years") | 
+                               (filter_data$length == "8 years") | (filter_data$length == "9 years")] <- "6-9 years"
+filter_data$employed_length [(filter_data$length == "10 years") | (filter_data$length == "10+ years")] <- "10-10+ years"
+filter_data$employed_length [(filter_data$length == "n/a")] <- ""
+filter_data$employed_length = as.factor(filter_data$employed_length)
+
+filter_data$risk_grade[(filter_data$grade == "A") | (filter_data$grade == "B")] <- "least_risk"
+filter_data$risk_grade[(filter_data$grade == "C") | (filter_data$grade == "D") | (filter_data$grade == "E")] <- "moderate"
+filter_data$risk_grade[(filter_data$grade == "F") | (filter_data$grade == "G")] <- "risky"
+filter_data$risk_grade = as.factor(filter_data$risk_grade)
+
+filter_data$closeAcc = filter_data$totalAcc - filter_data$openAcc
+
+drop_columns = c(1,6,7,8,12,14,21,31)
+filtered_dataset = filter_data[-drop_columns] # drop id, grade, employment, length, status, state, totalAcc totalBcLim columns
+```
+
+After doing those feature engineering, a much clear dataset was prepared. By exploring the summary of the 'filtered_dataset', found some missing values in the variables 'revolRatio', 'bcOpen' and 'bcRatio'. The count of missing values of 'bcOpen' and 'bcRatio' was more than 300, so removing all the missing values could bias the result. To deal with the missing values here used the 'mice' package to impute them. Finally got the final cleaned version of the dataset 'cleaned_dataset' to apply the statistical tools for default loan analysis.
+
+```{r}
+summary(filtered_dataset)
+```
+
+```{r include=FALSE}
+numeric_columns <- sapply(filtered_dataset, is.numeric)
+numeric_columns
+```
+
+```{r echo=FALSE}
+na_col = colnames(filtered_dataset)[apply(is.na(filtered_dataset), 2, any)]
+na_col
+```
+
+```{r include=FALSE}
+impute_dataset = filtered_dataset[, na_col]
+impute_dataset
+```
+
+```{r results="hide", message=FALSE}
+#install.packages("mice")
+library(mice)
+imputed_data = complete(mice(impute_dataset))
+summary(imputed_data)
+```
+
+```{r include=FALSE}
+filtered_dataset$revolRatio <- imputed_data$revolRatio
+filtered_dataset$bcOpen <- imputed_data$bcOpen
+filtered_dataset$bcRatio <- imputed_data$bcRatio
+
+cleaned_dataset <- filtered_dataset
+summary(cleaned_dataset)
+str(cleaned_dataset)
+```
+
+The final 'cleaned_dataset' has divided into 2 datasets. 80% of cleaned_dataset used as training and 20% as test dataset. The 'caTools' package was used to creat the test and training dataset. The training dataset has used to find out the best regression model and the test dataset has used to predict the proportion of bad and good loans by using contingency table. 
+
+```{r results='hide', message=FALSE}
+#install.packages("caTools")
+require(caTools)
+set.seed(123) 
+sample = sample.split(cleaned_dataset,SplitRatio = 0.80) 
+training_data = subset(cleaned_dataset,sample ==TRUE)
+test_data = subset(cleaned_dataset, sample==FALSE)
+
+training_data = subset(training_data, select = -(totalPaid)) # Drop totalPaid from training dataset
+summary(training_data)
+summary(test_data)
+```
+
+## First Model and Diagnostics
+
+The first logistic regression model with all of the explanatory variables is given below,
+
+```{r results="hide"}
+loan_model = glm(loan_status~amount+term+rate+payment+home+income+verified+
+                   reason+debtIncRat+delinq2yr+inq6mth+openAcc+pubRec+
+                   revolRatio+totalBal+totalRevLim+accOpen24+avgBal+bcOpen+
+                   bcRatio+totalLim+totalRevBal+totalIlLim+emp_status+
+                   employed_length+risk_grade+closeAcc,
+                 data = training_data,family="binomial")
+summary(loan_model)
+```
+
+The AIC of the first model is 26011. The predicted probablity and the overall accuracy of this model has been calculated and compare them with other models to find the best one.
+
+```{r include=FALSE}
+predprob = predict(loan_model, newdata = test_data, type="response")
+pred_goodbad = cut(predprob, breaks = c(-Inf, 0.5, Inf), labels=c("Bad", "Good")) 
+```
+
+Contingency table of the full model:
+
+```{r echo=FALSE}
+contin_table1 = table(test_data$loan_status, pred_goodbad)
+addmargins(contin_table1)
+
+proportion1 = sum(diag(contin_table1)) / sum(contin_table1)  
+print(paste('Overall Accuracy (Correctly predicted outcomes): ', round((proportion1*100),2)))
+
+TP = contin_table1[1,1]
+FN = contin_table1[2,1]
+TN = contin_table1[2,2]
+FP = contin_table1[1,2]
+
+true_bad = TP/(TP+FN)
+print(paste('Correctly predicted bad loans: ', round((true_bad*100),2)))
+```
+
+The percentage of correctly predicted outcomes is `r round((proportion1*100),2)`%
+
+Correctly predicted bad loans: `r round((true_bad*100),2)`%
+
+Based on the result, this is not an effective model for predicting true good or bad loans.
+
+## Improved Model and Diagnostics
+
+To get a better outcome and a good model from the analysis, the number of Bad loans should be increased in order to balance the number of Good and Bad loans. Because a model can achieve high accuracy by simply classifying all loans as "Good". For increasing the Bad loans rows, the over-sampling technique has used and make the dataset balanced. 
+
+# Balanced Model
+
+```{r echo=FALSE}
+bad_dataset = subset(training_data, loan_status=="Bad")
+length_baddata = length(bad_dataset$loan_status)
+#length_baddata
+good_dataset = subset(training_data, loan_status=="Good")
+sample_length = length(good_dataset$loan_status) - length_baddata
+#sample_length
+newrows = sample(length_baddata,sample_length,replace=T) 
+overSampling = rbind(bad_dataset,bad_dataset[newrows,]) # Over Sampling  
+
+balanced_training_dataset = rbind(good_dataset,overSampling)
+```
+
+```{r}
+table(balanced_training_dataset$loan_status)
+```
+
+From the balanced dataset, a new logistic regression mode and a contingency table has created to predict the overall accuracy of the model, correctly identified Bad loans and incorrectly identified Good loans. The original test dataset has used in the contingency table to compare it with the first model of unbalanced dataset.
+
+```{r include=FALSE}
+balanced_model = glm(loan_status ~ amount+term+rate+payment+home+income+verified+reason+debtIncRat+delinq2yr+inq6mth+openAcc+pubRec+
+                   revolRatio+totalBal+totalRevLim+accOpen24+avgBal+bcOpen+bcRatio+totalLim+totalRevBal+totalIlLim+emp_status+
+                   employed_length+risk_grade+closeAcc, data = balanced_training_dataset, family="binomial")
+summary(balanced_model)
+```
+
+Contingency Table from Balanced model,
+
+```{r echo=FALSE}
+balanced_probability = predict(balanced_model, newdata = test_data, type="response")
+pred_GooBad2 = cut(balanced_probability, breaks = c(-Inf, 0.5, Inf), labels=c("Bad", "Good")) 
+
+contin_table2 = table(test_data$loan_status, pred_GooBad2)
+addmargins(contin_table2)
+
+accuracy2 = sum(diag(contin_table2)) / sum(contin_table2)  
+print(paste('Overall Accuracy (Correctly predicted outcomes): ', round((accuracy2*100),2)))
+
+TP2 = contin_table2[1,1]
+FN2 = contin_table2[2,1]
+TN2 = contin_table2[2,2]
+FP2 = contin_table2[1,2]
+
+true_bad2 = TP2/(TP2+FN2)
+print(paste('Correctly predicted bad loans: ', round((true_bad2*100),2)))
+FPR = FP2/(FP2+TN2)
+print(paste('Incorrectly identified good loans: ', round((FPR*100),2)))
+```
+
+The AIC value and the over all accuracy of the new model indicates that this model is less efficient than the first one. Because the AIC value of the balanced model is greater than the first one, also the over all accuracy is less in the balanced model, because the model is created from a balanced dataset. 
+
+Now, another model has created by automatic model selection method to compare with the previous ones.
+
+# Automatic Model Selection Using Step Function
+
+The first step of automatic model selection is to use the VIF function to find out some extreme coliniarity between coefficients. If the VIF value is more than 10, then those explanatory variables should be removed one by one from the model and test it again to get a more effective model with no coliniarity.
+
+```{r}
+new_model = glm(loan_status ~ amount+term+rate+payment+home+income+verified+
+                  reason+debtIncRat+delinq2yr+inq6mth+openAcc+pubRec+
+                  revolRatio+totalBal+totalRevLim+accOpen24+avgBal+bcOpen+
+                  bcRatio+totalLim+totalRevBal+totalIlLim+emp_status+
+                  employed_length+risk_grade+closeAcc,
+                data = balanced_training_dataset, family="binomial")
+
+library(car)
+vif(new_model)
+```
+
+```{r include=FALSE}
+new_model2 = glm(loan_status ~ amount+term+rate+payment+home+income+verified+reason+debtIncRat+delinq2yr+inq6mth+openAcc+pubRec+
+                   revolRatio+totalRevLim+accOpen24+avgBal+bcOpen+bcRatio+totalLim+totalRevBal+totalIlLim+emp_status+
+                   employed_length+risk_grade+closeAcc, data = balanced_training_dataset, family="binomial")
+vif(new_model2)
+new_model3 = glm(loan_status ~ term+rate+payment+home+income+verified+reason+debtIncRat+delinq2yr+inq6mth+openAcc+pubRec+
+                   revolRatio+totalRevLim+accOpen24+avgBal+bcOpen+bcRatio+totalLim+totalRevBal+totalIlLim+emp_status+
+                   employed_length+risk_grade+closeAcc, data = balanced_training_dataset, family="binomial")
+vif(new_model3)
+new_model4 = glm(loan_status ~ term+rate+payment+home+income+verified+reason+debtIncRat+delinq2yr+inq6mth+openAcc+pubRec+
+                   revolRatio+totalRevLim+accOpen24+avgBal+bcOpen+bcRatio+totalLim+totalRevBal+totalIlLim+emp_status+
+                   risk_grade+closeAcc, data = balanced_training_dataset, family="binomial")
+vif(new_model4)
+new_model5 = glm(loan_status ~ term+rate+payment+home+income+verified+reason+debtIncRat+delinq2yr+inq6mth+openAcc+pubRec+
+                   revolRatio+totalRevLim+accOpen24+avgBal+bcOpen+bcRatio+totalLim+totalIlLim+emp_status+
+                   risk_grade+closeAcc, data = balanced_training_dataset, family="binomial")
+vif(new_model5)
+step(new_model5)
+```
+
+From the vif function it has found that 'amount, payment, totalBal, totalLim, totalRevBal, totalIlLim, emp_status and employed_length' variables have VIF values more than 10. Remove those coefficients one by one based on the high VIF value and checked again if the coliniarity has gone or not. After removing totalBal, amount, employed_length and totalRevBal the VIF values of all the explanatory variables found below 10. Then another model has created and the step wise automatic model selection has applied. Finally got a suitable model from the step function based on AIC value.
+
+New model from step function after removing the large VIF variables
+
+```{r results="hide"}
+step_model = glm(loan_status ~ term+rate+payment+home+income+reason+
+                   debtIncRat+delinq2yr+inq6mth+revolRatio+accOpen24+
+                   bcOpen+bcRatio+totalLim+totalIlLim+emp_status+risk_grade+
+                   closeAcc,family="binomial",data=balanced_training_dataset)
+summary(step_model)
+```
+
+```{r include=FALSE}
+predprobability = predict(step_model, newdata = test_data, type="response")
+GooBad_pred = cut(predprobability, breaks = c(-Inf, 0.5, Inf), labels=c("Bad", "Good")) 
+```
+
+Contingency table
+
+```{r echo=FALSE}
+contin_table3 = table(test_data$loan_status, GooBad_pred)
+addmargins(contin_table3)
+
+TN3 = contin_table3[1,1]
+FN3 = contin_table3[2,1]
+TP3 = contin_table3[2,2]
+FP3 = contin_table3[1,2]
+
+accuracy3 = (TP3+TN3)/(TP3+FP3+TN3+FN3)  
+print(paste('Overall Accuracy (Correctly predicted outcomes): ', round((accuracy3*100),2)))
+
+true_bad3 = TN3/(TN3+FP3)
+print(paste('Correctly predicted bad loans: ', round((true_bad3*100),2)))
+
+FPR3 = FP3/(FP3+TN3)
+print(paste('Incorrectly identified good loans: ', round((FPR3*100),2)))
+
+TPR3 = TP3/(FN3+TP3)
+print(paste('Correctly predicted good loans: ', round((TPR3*100),2)))
+```
+
+AIC value of this model after removing large VIF is greater than the balanced model. Overall Accuracy `r round((accuracy3*100),2)`%, correctly predicted good loans are `r round((TPR3*100),2)`% and correctly predicted bad loans are `r round((true_bad3*100),2)`%.
+
+## Tuning the Predictions and Profit Analysis
+
+After analyzing balanced model and autometic model selection with step function, the AIC value of balanced model is less compare to automatic model. Now calculate the total profit based on the best model.
+
+# Profit of Predicted Good Loans According to Balanced Model
+
+```{r}
+profit = test_data$totalPaid - test_data$amount
+
+balanced_probability = predict(balanced_model, newdata = test_data, type="response")
+pred_GooBad2 = cut(balanced_probability, breaks = c(-Inf, 0.5, Inf), labels=c("Bad", "Good")) 
+
+profitgood = profit[pred_GooBad2 == "Good"]
+print(paste('Total Profit: ', sum(profitgood)))
+```
+
+# Changing Threshold
+
+The model accuracy and the total profit of predicted good loans are checked by changing the threshold levels. For different threshold levels, we got different percentage of correctly identified good loans and different total profit.
+
+```{r echo=FALSE}
+i = 0.1
+changing_threshold <- function(){
+  while(i <= 0.9){
+    balanced_probability = predict(balanced_model, newdata = test_data, type="response")
+    pred_GooBad = cut(balanced_probability, breaks = c(-Inf, i, Inf), labels=c("Bad", "Good")) 
+    contin_table = table(test_data$loan_status, pred_GooBad)
+    #addmargins(contin_table)
+    
+    TN = contin_table[1,1]
+    FN = contin_table[2,1]
+    TP = contin_table[2,2]
+    FP = contin_table[1,2]
+    
+    accuracy = (TP+TN)/(TP+FP+TN+FN)  
+    print(paste('Overall Accuracy at threshold level ', i, ' is ', round((accuracy*100),2),'%'))
+    
+    true_bad = TN/(TN+FP)
+    print(paste('Correctly predicted bad loans: ', round((true_bad*100),2),'%'))
+    
+    FPR = FP/(FP+TN)
+    print(paste('Incorrectly identified good loans: ', round((FPR*100),2),'%'))
+    
+    TPR = TP/(FN+TP)
+    print(paste('Correctly predicted good loans: ', round((TPR*100),2),'%'))
+    
+    profitgood = profit[pred_GooBad == "Good"]
+    totalprofit = round(sum(profitgood),2)
+    print(paste('Total Profit: ', totalprofit))
+    print(" ")
+    i = i+0.1
+  }
+}
+changing_threshold()
+```
+
+It has shown from the different threshold level that, at threshold 0.3 the profit is high and correctly predicted good loans percentage is more than 90%.
+
+## Results Summary
+
+The analysis of balanced model and autometic model selection, after removing the high VIF coefficients, shows that the AIC value of balanced model is less than the autometic stepwise model. This indicates, the balanced model is the best logistic regression model to calculate the profit for the bank as well as the percentage of correctly predicted good and default loans.
+
+The over all accuracy and the total profit for the predicted good loans with different threshold levels are presented in the following table,
+
+```{r echo = FALSE}
+all_profit = matrix(c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,3023265.06,3804192.2,4353921.92,4349920.54,3611367.2,2728642.18,1779788.48,596516.07,63720.37),ncol = 2)
+colnames(all_profit) <- c("Threshold", "TotalProfit")
+as.table(all_profit)
+```
+
+From the table it can be found that, at the threshold level of 0.3 the over all accuracy is more than 90%. Moreover the total profit of all predicted good loans at the threshold level of 0.3 is higher compare to the profit of all other threshold levels.
+
+
+
+
+
